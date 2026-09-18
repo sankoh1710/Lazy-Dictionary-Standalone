@@ -1,0 +1,33 @@
+# Lazy Dictionary
+
+> Lazy Dictionary converts English words into simplified phonetic spelling —
+> the way they actually sound.
+
+## What is the Lazy Alphabet?
+
+The Lazy Alphabet is a simplified writing system for English. It removes
+redundant letters (C, Q, X) and uses consistent letter-to-phoneme mappings
+so every word is spelled exactly as it sounds.
+
+Lazy Alphabet letters: A B D E F G H I J K L M N O P R S SH T TH U V W Y Z CH NG ZH
+
+## Key Spelling Rules
+
+- ph → f  (phone → fon)
+- ck → k  (back → bak)
+- c before e/i/y → s  (city → siti)
+- c elsewhere → k  (cat → kat)
+- qu → kw  (queen → kween)
+- x → ks  (fox → foks)
+- silent gh → drop  (night → nyt)
+- kn → n  (knife → nyf)
+- wr → r  (write → ryt)
+- wh → w  (where → wer)
+- tion → shon  (nation → nashon)
+- ough → oo/uf/ot  (through → throo)
+- double letters → single  (butter → buter)
+
+## Interactive tool
+
+Look up any English word at https://lazydictionary.com/ to see its Lazy spelling.
+

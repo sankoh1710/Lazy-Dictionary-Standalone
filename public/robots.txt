@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://lazydictionary.com/sitemap.xml
+
