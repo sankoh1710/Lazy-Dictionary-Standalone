@@ -1,5 +1,6 @@
 import { createRoot, hydrateRoot } from 'react-dom/client';
-import { Router, Route, Switch } from 'wouter';
+import { Route, Switch } from 'wouter';
+import { Analytics } from '@vercel/analytics/react';
 
 import App from './App';
 import { WordPage } from './pages/WordPage';
@@ -15,14 +16,19 @@ function Routes() {
   );
 }
 
-const rootEl = document.getElementById('root')!;
-
-// If the root already has server-rendered content (from the build-time
-// pre-render step), hydrate instead of mounting fresh so the static HTML
-// survives until React takes over (fast FCP, no flash).
-if (rootEl.innerHTML.trim()) {
-  hydrateRoot(rootEl, <Routes />);
-} else {
-  createRoot(rootEl).render(<Routes />);
+function RootApp() {
+  return (
+    <>
+      <Routes />
+      <Analytics />
+    </>
+  );
 }
 
+const rootEl = document.getElementById('root')!;
+
+if (rootEl.innerHTML.trim()) {
+  hydrateRoot(rootEl, <RootApp />);
+} else {
+  createRoot(rootEl).render(<RootApp />);
+}
