@@ -3,6 +3,7 @@ import { Search, ArrowRight, BookOpen, Info, Wand2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { toLazy } from "./lib/lazySpell";
+import { SpellingExperiment } from "./components/SpellingExperiment";
 import { lookupWord, dictionary, DictionaryEntry } from "./data/dictionary";
 
 // Randomly sample n words from the dictionary
@@ -142,6 +143,9 @@ function App() {
             </div>
           )}
         </section>
+
+        {/* Phase 1 — an in-browser experiment; no data is saved yet. */}
+        <SpellingExperiment />
 
         {/* The Lazy Alphabet */}
         <section className="mt-8 flex flex-col gap-6 animate-in fade-in duration-1000 delay-300 fill-mode-both">
