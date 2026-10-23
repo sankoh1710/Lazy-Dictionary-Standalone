@@ -142,8 +142,8 @@ input values for another attempt.
 ## Safety for this educational phase
 
 - Database writes require `SPELLING_SUBMISSIONS_ENABLED=true`.
-- Writes are **always disabled** when `VERCEL_ENV=production`, regardless
-  of the toggle.
+- Writes are **always disabled** on Vercel Preview and Production deployments,
+  regardless of the toggle. Only local development can enable them.
 - The server-only secret key is never included in browser JavaScript.
 - The API accepts only small JSON submissions and checks spelling length
   and allowed characters on the server.
