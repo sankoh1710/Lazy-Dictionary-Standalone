@@ -1,55 +1,133 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { ArrowRight, PenLine } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import { validateSpellingSubmission } from "@/lib/spellingSubmission";
 
-interface PreviewSubmission {
+type ConnectionMode = "checking" | "preview" | "database";
+
+interface RecentSubmission {
   originalWord: string;
   suggestedSpelling: string;
+  saved: boolean;
+  id?: number;
 }
 
-const spellingPattern = /^[A-Za-z]+(?:['-][A-Za-z]+)*$/;
-
-/**
- * Phase 1 only: submissions live in React memory.
- * No network request, browser storage, or database write occurs here.
- */
 export function SpellingExperiment() {
   const [originalWord, setOriginalWord] = useState("");
   const [suggestedSpelling, setSuggestedSpelling] = useState("");
-  const [previewSubmissions, setPreviewSubmissions] = useState<PreviewSubmission[]>([]);
+  const [recentSubmissions, setRecentSubmissions] = useState<RecentSubmission[]>([]);
+  const [mode, setMode] = useState<ConnectionMode>("checking");
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  // Vite alone serves only the frontend. The database mode becomes available
+  // when the Vercel API reports that it is deliberately enabled and configured.
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function checkConnection() {
+      try {
+        const response = await fetch("/api/spellings", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error("API unavailable");
+        const result: unknown = await response.json();
+        if (controller.signal.aborted) return;
+        const available =
+          typeof result === "object" &&
+          result !== null &&
+          "enabled" in result &&
+          result.enabled === true;
+        setMode(available ? "database" : "preview");
+      } catch {
+        if (!controller.signal.aborted) setMode("preview");
+      }
+    }
+
+    void checkConnection();
+    return () => controller.abort();
+  }, []);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (saving || mode === "checking") return;
     setError("");
     setMessage("");
 
-    const original = originalWord.trim();
-    const suggested = suggestedSpelling.trim();
+    const validated = validateSpellingSubmission({
+      original_word: originalWord,
+      suggested_spelling: suggestedSpelling,
+    });
 
-    if (!original || !suggested) {
-      setError("Enter both the English word and your suggested spelling.");
+    if (!validated.ok) {
+      setError(validated.error);
       return;
     }
 
-    if (!spellingPattern.test(original) || !spellingPattern.test(suggested)) {
-      setError("Use letters, with optional internal apostrophes or hyphens.");
+    const addRecent = (saved: boolean, id?: number) => {
+      setRecentSubmissions((previous) =>
+        [
+          {
+            originalWord: validated.value.original_word,
+            suggestedSpelling: validated.value.suggested_spelling,
+            saved,
+            id,
+          },
+          ...previous,
+        ].slice(0, 5),
+      );
+      setOriginalWord("");
+      setSuggestedSpelling("");
+    };
+
+    if (mode === "preview") {
+      addRecent(false);
+      setMessage("Preview added. No data has been sent or saved.");
       return;
     }
 
-    if (original.toLowerCase() === suggested.toLowerCase()) {
-      setError("Try a different spelling for the original word.");
-      return;
-    }
+    setSaving(true);
+    try {
+      const response = await fetch("/api/spellings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(validated.value),
+      });
+      const result: unknown = await response.json();
+      if (!response.ok) {
+        const detail =
+          typeof result === "object" &&
+          result !== null &&
+          "error" in result &&
+          typeof result.error === "string"
+            ? result.error
+            : "Unable to save. Please try again.";
+        throw new Error(detail);
+      }
+      if (
+        typeof result !== "object" ||
+        result === null ||
+        !("saved" in result) ||
+        result.saved !== true ||
+        !("submission" in result) ||
+        typeof result.submission !== "object" ||
+        result.submission === null ||
+        !("id" in result.submission) ||
+        typeof result.submission.id !== "number"
+      ) {
+        throw new Error("The database did not confirm the saved record.");
+      }
 
-    setPreviewSubmissions((previous) =>
-      [{ originalWord: original, suggestedSpelling: suggested }, ...previous].slice(0, 5),
-    );
-    setOriginalWord("");
-    setSuggestedSpelling("");
-    setMessage("Preview added. It has not been saved to a database.");
+      addRecent(true, result.submission.id);
+      setMessage("Saved to PostgreSQL. Check the row in your Supabase SQL Editor.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to save. Please try again.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -80,13 +158,10 @@ export function SpellingExperiment() {
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
+          <form onSubmit={(event) => void handleSubmit(event)} className="flex flex-col gap-4" noValidate>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="flex flex-col gap-2">
-                <label
-                  htmlFor="original-word"
-                  className="text-sm font-medium text-foreground"
-                >
+                <label htmlFor="original-word" className="text-sm font-medium text-foreground">
                   Original English word
                 </label>
                 <Input
@@ -104,10 +179,7 @@ export function SpellingExperiment() {
                 />
               </div>
               <div className="flex flex-col gap-2">
-                <label
-                  htmlFor="suggested-spelling"
-                  className="text-sm font-medium text-foreground"
-                >
+                <label htmlFor="suggested-spelling" className="text-sm font-medium text-foreground">
                   Your suggested spelling
                 </label>
                 <Input
@@ -125,59 +197,63 @@ export function SpellingExperiment() {
                 />
               </div>
             </div>
-            {error && (
-              <p role="alert" className="text-sm text-destructive">
-                {error}
-              </p>
-            )}
-            {message && (
-              <p role="status" className="text-sm text-muted-foreground">
-                {message}
-              </p>
-            )}
+
+            {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+            {message && <p role="status" className="text-sm text-muted-foreground">{message}</p>}
+
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <button
                 type="submit"
-                className="rounded-xl bg-primary px-5 py-3 font-semibold text-primary-foreground hover:opacity-90 transition-opacity cursor-pointer"
+                disabled={saving || mode === "checking"}
+                className="rounded-xl bg-primary px-5 py-3 font-semibold text-primary-foreground hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Preview my spelling
+                {mode === "checking"
+                  ? "Checking connection…"
+                  : saving
+                    ? "Saving…"
+                    : mode === "database"
+                      ? "Save spelling"
+                      : "Preview my spelling"}
               </button>
               <span className="text-xs text-muted-foreground">
-                Demo only · no information is stored or sent
+                {mode === "database"
+                  ? "Database test mode · saves to Supabase"
+                  : mode === "checking"
+                    ? "Checking whether database writes are enabled"
+                    : "Preview mode · nothing is stored or sent"}
               </span>
             </div>
           </form>
 
           <div className="border-t border-border/60 pt-5">
             <h3 className="text-sm font-semibold text-foreground mb-3">
-              Your previews (this page only)
+              Recent submissions in this browser
             </h3>
-            {previewSubmissions.length === 0 ? (
+            {recentSubmissions.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 Nothing here yet. Submit a spelling above to test the form.
               </p>
             ) : (
-              <ul className="flex flex-col gap-2" aria-label="Previewed spellings">
-                {previewSubmissions.map((submission, index) => (
+              <ul className="flex flex-col gap-2" aria-label="Recent spellings">
+                {recentSubmissions.map((submission, index) => (
                   <li
-                    key={index}
+                    key={submission.id ?? `preview-${index}`}
                     className="flex flex-wrap items-center gap-3 rounded-xl bg-secondary/30 px-4 py-3 text-sm"
                   >
                     <span className="font-medium break-all">{submission.originalWord}</span>
-                    <ArrowRight
-                      className="h-4 w-4 shrink-0 text-muted-foreground"
-                      aria-hidden="true"
-                    />
+                    <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                     <span className="font-bold text-primary break-all">
                       {submission.suggestedSpelling}
+                    </span>
+                    <span className="text-xs text-muted-foreground ml-auto">
+                      {submission.saved ? `Saved · #${submission.id}` : "Preview only"}
                     </span>
                   </li>
                 ))}
               </ul>
             )}
             <p className="mt-3 text-xs text-muted-foreground">
-              These previews disappear if you refresh the page. Database storage
-              will be added in a later phase.
+              This list resets on refresh. Records marked "Saved" stay in PostgreSQL.
             </p>
           </div>
         </CardContent>
