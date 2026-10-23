@@ -10,13 +10,13 @@ function json(data: unknown, status = 200): Response {
 }
 
 /**
- * Enable writes only for a deliberate development/preview experiment.
- * Public production submissions will need abuse prevention before activation.
+ * Enable writes only for an explicitly enabled LOCAL development experiment.
+ * Preview and production deployments will need abuse prevention before activation.
  */
 function isConfiguredAndEnabled(): boolean {
   return (
     process.env.SPELLING_SUBMISSIONS_ENABLED === "true" &&
-    process.env.VERCEL_ENV !== "production" &&
+    (!process.env.VERCEL_ENV || process.env.VERCEL_ENV === "development") &&
     Boolean(process.env.SUPABASE_URL) &&
     Boolean(process.env.SUPABASE_SECRET_KEY)
   );
