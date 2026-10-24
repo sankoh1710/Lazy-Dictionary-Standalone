@@ -3,6 +3,7 @@ import { ArrowRight, PenLine } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { validateSpellingSubmission } from "@/lib/spellingSubmission";
+import { SpellingRecords } from "./SpellingRecords";
 
 type ConnectionMode = "checking" | "preview" | "database";
 
@@ -21,6 +22,7 @@ export function SpellingExperiment() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [savedVersion, setSavedVersion] = useState(0);
 
   // Vite alone serves only the frontend. The database mode becomes available
   // when the Vercel API reports that it is deliberately enabled and configured.
@@ -122,6 +124,7 @@ export function SpellingExperiment() {
       }
 
       addRecent(true, result.submission.id);
+      setSavedVersion((version) => version + 1);
       setMessage("Saved to PostgreSQL. Check the row in your Supabase SQL Editor.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to save. Please try again.");
@@ -258,6 +261,7 @@ export function SpellingExperiment() {
           </div>
         </CardContent>
       </Card>
+      {mode === "database" && <SpellingRecords refreshToken={savedVersion} />}
     </section>
   );
 }
