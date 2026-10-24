@@ -75,7 +75,7 @@ async function handleRequest(request: Request): Promise<Response> {
   if (sort !== "recent" && sort !== "oldest") {
     return json({ error: "Invalid sort order." }, 400);
   }
-  if (!/^\\d+$/.test(rawLimit) || !Number.isSafeInteger(limit) || limit < 1 || limit > MAX_LIMIT) {
+  if (!/^[0-9]+$/.test(rawLimit) || !Number.isSafeInteger(limit) || limit < 1 || limit > MAX_LIMIT) {
     return json({ error: "Limit must be between 1 and 30." }, 400);
   }
 
@@ -116,7 +116,7 @@ async function handleRequest(request: Request): Promise<Response> {
     // Use null when it is unavailable rather than making up a total.
     const contentRange = response.headers.get("content-range");
     const totalString = contentRange?.split("/")[1];
-    const total = totalString && /^\\d+$/.test(totalString) ? Number(totalString) : null;
+    const total = totalString && /^[0-9]+$/.test(totalString) ? Number(totalString) : null;
 
     return json({ records: rawData, total, filter: filter || null, sort });
   } catch {
