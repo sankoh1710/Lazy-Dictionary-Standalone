@@ -144,7 +144,7 @@ function App() {
           )}
         </section>
 
-        {/* Phase 1 — an in-browser experiment; no data is saved yet. */}
+        {/* Spelling submissions and local database exploration. */}
         <SpellingExperiment />
 
         {/* The Lazy Alphabet */}
