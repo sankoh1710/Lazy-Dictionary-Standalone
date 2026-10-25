@@ -29,10 +29,6 @@ ALTER TABLE public.spelling_submissions ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public.spelling_submissions FROM anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.spelling_submissions TO service_role;
 
--- If using a default-id sequence, service_role needs sequence access too.
--- Usually this already exists from Supabase defaults, but ensure it.
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO service_role;
-
 NOTIFY pgrst, 'reload schema';
 
 -- Sanity check:
