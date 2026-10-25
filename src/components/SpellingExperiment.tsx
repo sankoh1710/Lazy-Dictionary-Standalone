@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { validateSpellingSubmission } from "@/lib/spellingSubmission";
 import { SpellingRecords } from "./SpellingRecords";
+import { SpellingAnalytics } from "./SpellingAnalytics";
 
 type ConnectionMode = "checking" | "preview" | "database";
 
@@ -261,7 +262,12 @@ export function SpellingExperiment() {
           </div>
         </CardContent>
       </Card>
-      {mode === "database" && <SpellingRecords refreshToken={savedVersion} />}
+      {mode === "database" && (
+        <>
+          <SpellingAnalytics refreshToken={savedVersion} />
+          <SpellingRecords refreshToken={savedVersion} />
+        </>
+      )}
     </section>
   );
 }
