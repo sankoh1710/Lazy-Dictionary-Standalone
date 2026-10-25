@@ -27,7 +27,13 @@ function apiError(value: unknown, fallback: string): string {
  * Educational local-only admin workflow. Token is held only in React state,
  * never in localStorage or cookies; a refresh requires signing in again.
  */
-export function SpellingModeration({ refreshToken }: { refreshToken: number }) {
+export function SpellingModeration({
+  refreshToken,
+  onChanged,
+}: {
+  refreshToken: number;
+  onChanged: () => void;
+}) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [token, setToken] = useState<string | null>(null);
@@ -151,6 +157,7 @@ export function SpellingModeration({ refreshToken }: { refreshToken: number }) {
           : `Marked submission #${id} as ${action}.`,
       );
       setRefreshCount((count) => count + 1);
+      onChanged();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Moderation operation failed.");
     } finally {
