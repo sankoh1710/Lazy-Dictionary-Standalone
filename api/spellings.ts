@@ -13,8 +13,15 @@ function json(data: unknown, status = 200): Response {
  * Enable writes only for an explicitly enabled LOCAL development experiment.
  * Preview and production deployments will need abuse prevention before activation.
  */
-function isConfiguredAndEnabled(): boolean {
+function isConfiguredAndEnabled(request: Request): boolean {
+  let host: string;
+  try {
+    host = new URL(request.url).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
   return (
+    (host === "localhost" || host === "127.0.0.1" || host === "[::1]") &&
     process.env.SPELLING_SUBMISSIONS_ENABLED === "true" &&
     (!process.env.VERCEL_ENV || process.env.VERCEL_ENV === "development") &&
     Boolean(process.env.SUPABASE_URL) &&
@@ -24,14 +31,14 @@ function isConfiguredAndEnabled(): boolean {
 
 async function handleRequest(request: Request): Promise<Response> {
   if (request.method === "GET") {
-    return json({ enabled: isConfiguredAndEnabled() });
+    return json({ enabled: isConfiguredAndEnabled(request) });
   }
 
   if (request.method !== "POST") {
     return json({ error: "Method not allowed." }, 405);
   }
 
-  if (!isConfiguredAndEnabled()) {
+  if (!isConfiguredAndEnabled(request)) {
     return json({ error: "Database submissions are not enabled here." }, 503);
   }
 
