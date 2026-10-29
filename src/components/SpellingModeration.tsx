@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { LockKeyhole, LogOut, RefreshCw, ShieldCheck } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { SpellingAuditLog } from "./SpellingAuditLog";
 
 type ModerationStatus = "pending" | "approved" | "rejected";
 type ModerationFilter = ModerationStatus | "all";
@@ -308,6 +309,7 @@ export function SpellingModeration({
                   ))}
                 </ul>
               )}
+              <SpellingAuditLog token={token} refreshToken={refreshToken + refreshCount} />
             </>
           )}
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
@@ -315,7 +317,7 @@ export function SpellingModeration({
           <p className="text-xs text-muted-foreground">
             Your login token stays in browser memory and disappears on refresh.
             Do not use this local moderation interface for public launch without
-            strengthening sessions, rate limits, and audit logging.
+            strengthening sessions, public-facing rate limits, and monitoring.
           </p>
         </CardContent>
       </Card>
