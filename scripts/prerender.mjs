@@ -36,6 +36,25 @@ const homepageOutput = template.replace(
 writeFileSync(indexHtmlPath, homepageOutput);
 console.log('✓ Homepage pre-render complete');
 
+// The admin URL is a separate client-rendered entry. Do NOT inject homepage
+// prerendered HTML into it: that would create hydration mismatches and render
+// public content on the admin page before React routes are ready.
+//
+// This static file contains no database data or admin credentials. Real access
+// control is enforced independently on every server-side admin API.
+const adminHtml = template
+  .replace(/<title>[^<]*<\/title>/, '<title>Administration | Lazy Dictionary</title>')
+  .replace(
+    /<meta name="description" content="[^"]*"/,
+    '<meta name="description" content="Private development administration."',
+  )
+  .replace('</head>', '  <meta name="robots" content="noindex,nofollow" />\n</head>');
+
+const adminDirectory = resolve(root, 'dist/public/admin');
+mkdirSync(adminDirectory, { recursive: true });
+writeFileSync(resolve(adminDirectory, 'index.html'), adminHtml);
+console.log('✓ Admin route HTML generated (client-only, noindex)');
+
 // ---------------------------------------------------------------------------
 // 3. Build per-word HTML pages
 //
