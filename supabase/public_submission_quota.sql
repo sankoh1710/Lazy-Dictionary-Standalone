@@ -28,7 +28,7 @@ SECURITY INVOKER
 SET search_path = ''
 AS $$
 DECLARE
-  epoch_now bigint := pg_catalog.floor(pg_catalog.extract(epoch FROM pg_catalog.clock_timestamp()))::bigint;
+  epoch_now bigint := floor(extract(epoch FROM clock_timestamp()))::bigint;
   minute_start timestamptz := pg_catalog.to_timestamp((epoch_now / 60) * 60);
   hour_start timestamptz := pg_catalog.to_timestamp((epoch_now / 3600) * 3600);
   minute_count integer;
@@ -39,16 +39,16 @@ BEGIN
     RETURN pg_catalog.jsonb_build_object('allowed', false, 'retry_after_seconds', 3600);
   END IF;
 
-  INSERT INTO private.spelling_public_limits (scope_hash, window_kind, window_start, attempts)
+  INSERT INTO private.spelling_public_limits AS quota (scope_hash, window_kind, window_start, attempts)
   VALUES (p_scope_hash, 'minute', minute_start, 1)
   ON CONFLICT (scope_hash, window_kind, window_start)
-  DO UPDATE SET attempts = LEAST(private.spelling_public_limits.attempts + 1, 100)
+  DO UPDATE SET attempts = LEAST(quota.attempts + 1, 100)
   RETURNING attempts INTO minute_count;
 
-  INSERT INTO private.spelling_public_limits (scope_hash, window_kind, window_start, attempts)
+  INSERT INTO private.spelling_public_limits AS quota (scope_hash, window_kind, window_start, attempts)
   VALUES (p_scope_hash, 'hour', hour_start, 1)
   ON CONFLICT (scope_hash, window_kind, window_start)
-  DO UPDATE SET attempts = LEAST(private.spelling_public_limits.attempts + 1, 100)
+  DO UPDATE SET attempts = LEAST(quota.attempts + 1, 100)
   RETURNING attempts INTO hour_count;
 
   wait_seconds := CASE
