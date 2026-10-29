@@ -3,8 +3,9 @@ import { PenLine } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { validateSpellingSubmission } from "@/lib/spellingSubmission";
+import { TurnstileChallenge } from "./TurnstileChallenge";
 
-type ConnectionMode = "checking" | "preview" | "database";
+type ConnectionMode = "checking" | "preview" | "local" | "public";
 
 /**
  * Visitor-facing component: one form, one confirmation.
@@ -17,6 +18,9 @@ export function SpellingExperiment() {
   const [originalWord, setOriginalWord] = useState("");
   const [suggestedSpelling, setSuggestedSpelling] = useState("");
   const [mode, setMode] = useState<ConnectionMode>("checking");
+  const [turnstileSiteKey, setTurnstileSiteKey] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [challengeReset, setChallengeReset] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -33,11 +37,23 @@ export function SpellingExperiment() {
         if (!response.ok) throw new Error("Saving unavailable");
         const result: unknown = await response.json();
         if (controller.signal.aborted) return;
-        const allowed = result !== null &&
+        const available = result !== null &&
           typeof result === "object" &&
           "enabled" in result &&
           result.enabled === true;
-        setMode(allowed ? "database" : "preview");
+        if (!available) {
+          setMode("preview");
+        } else if ("mode" in result && result.mode === "public" &&
+                   "turnstileSiteKey" in result &&
+                   typeof result.turnstileSiteKey === "string" &&
+                   result.turnstileSiteKey) {
+          setTurnstileSiteKey(result.turnstileSiteKey);
+          setMode("public");
+        } else if ("mode" in result && result.mode === "local") {
+          setMode("local");
+        } else {
+          setMode("preview");
+        }
       } catch {
         if (!controller.signal.aborted) setMode("preview");
       }
@@ -62,8 +78,13 @@ export function SpellingExperiment() {
       return;
     }
 
-    if (mode !== "database") {
+    if (mode === "preview") {
       setMessage("This is a preview. No spelling was submitted or saved.");
+      return;
+    }
+
+    if (mode === "public" && !turnstileToken) {
+      setError("Complete the verification challenge before submitting.");
       return;
     }
 
@@ -72,7 +93,9 @@ export function SpellingExperiment() {
       const response = await fetch("/api/spellings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(validated.value),
+        body: JSON.stringify(mode === "public"
+          ? { ...validated.value, turnstile_token: turnstileToken }
+          : validated.value),
       });
       const result: unknown = await response.json();
       if (!response.ok) {
@@ -100,6 +123,10 @@ export function SpellingExperiment() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to submit. Try again.");
     } finally {
+      if (mode === "public") {
+        setTurnstileToken("");
+        setChallengeReset((value) => value + 1);
+      }
       setSaving(false);
     }
   };
@@ -172,7 +199,14 @@ export function SpellingExperiment() {
               </div>
             </div>
 
-            {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+            {mode === "public" && turnstileSiteKey && (
+              <TurnstileChallenge
+                siteKey={turnstileSiteKey}
+                onTokenChange={setTurnstileToken}
+                resetSignal={challengeReset}
+              />
+            )}
+            {error && <p role="alert" className="text-sm text-destructive">{error}</p>
             {message && <p role="status" className="text-sm text-muted-foreground">{message}</p>}
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -185,13 +219,15 @@ export function SpellingExperiment() {
                   ? "Checking availability…"
                   : saving
                     ? "Submitting…"
-                    : mode === "database"
+                    : mode === "local" || mode === "public"
                       ? "Submit spelling"
                       : "Preview spelling"}
               </button>
               <span className="text-xs text-muted-foreground">
-                {mode === "database"
-                  ? "Development test · suggestions go to review"
+                {mode === "public"
+                  ? "Suggestions are reviewed before publication"
+                  : mode === "local"
+                    ? "Local development test · suggestions go to review"
                   : mode === "checking"
                     ? "Checking submission availability"
                     : "Public submissions are not open yet · no data is saved"}
