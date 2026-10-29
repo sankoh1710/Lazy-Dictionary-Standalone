@@ -31,9 +31,11 @@ function apiError(value: unknown, fallback: string): string {
 export function SpellingModeration({
   refreshToken,
   onChanged,
+  onTokenChange,
 }: {
   refreshToken: number;
   onChanged: () => void;
+  onTokenChange: (token: string | null) => void;
 }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -67,6 +69,7 @@ export function SpellingModeration({
         throw new Error("Authentication response was invalid.");
       }
       setToken(result.access_token);
+      onTokenChange(result.access_token);
       setPassword("");
       setMessage("Admin signed in for this browser session.");
     } catch (cause) {
@@ -97,6 +100,7 @@ export function SpellingModeration({
         const result: unknown = await response.json();
         if (response.status === 401) {
           setToken(null);
+          onTokenChange(null);
           throw new Error("Session expired or admin access denied. Sign in again.");
         }
         if (!response.ok) throw new Error(apiError(result, "Could not load moderation records."));
@@ -149,6 +153,7 @@ export function SpellingModeration({
       const result: unknown = await response.json();
       if (response.status === 401) {
         setToken(null);
+        onTokenChange(null);
         throw new Error("Session expired. Sign in again.");
       }
       if (!response.ok) throw new Error(apiError(result, "Moderation operation failed."));
@@ -249,6 +254,7 @@ export function SpellingModeration({
                     type="button"
                     onClick={() => {
                       setToken(null);
+                      onTokenChange(null);
                       setRecords([]);
                       setMessage("");
                     }}
