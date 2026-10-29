@@ -75,7 +75,7 @@ function DistributionBar({
  * Analytics stays in local development. All aggregates come from PostgreSQL,
  * and a successful spelling save triggers an automatic refresh.
  */
-export function SpellingAnalytics({ refreshToken }: { refreshToken: number }) {
+export function SpellingAnalytics({ refreshToken, token }: { refreshToken: number; token: string }) {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -89,6 +89,7 @@ export function SpellingAnalytics({ refreshToken }: { refreshToken: number }) {
       setError("");
       try {
         const response = await fetch("/api/spelling-analytics", {
+          headers: { Authorization: "Bearer " + token },
           cache: "no-store",
           signal: controller.signal,
         });
@@ -115,7 +116,7 @@ export function SpellingAnalytics({ refreshToken }: { refreshToken: number }) {
 
     void load();
     return () => controller.abort();
-  }, [refreshToken, manualRefresh]);
+  }, [refreshToken, manualRefresh, token]);
 
   const biggestWord = Math.max(1, ...(data?.top_words.map((row) => row.submissions) ?? []));
   const biggestAlternative = Math.max(
