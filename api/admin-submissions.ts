@@ -98,40 +98,68 @@ async function handle(request: Request): Promise<Response> {
     return jsonResponse({ error: "Explicit deletion confirmation required." }, 400);
   }
 
-  const restUrl = supabaseEndpoint("/rest/v1/spelling_submissions");
-  restUrl.searchParams.set("id", "eq." + body.id);
-  restUrl.searchParams.set("select", "id,original_word,suggested_spelling,moderation_status,created_at,reviewed_at");
+  // After verifying the real Supabase Auth user ID against the server-side
+  // allowlist, this server supplies that already-verified UUID to PostgreSQL.
+  // Never accept an actor_id provided in the browser request body.
+  const action = request.method === "DELETE" ? "deleted" : body.status as string;
+  const actorId = process.env.SUPABASE_ADMIN_USER_ID;
+  if (!actorId) {
+    return jsonResponse({ error: "Admin identity is not configured." }, 503);
+  }
 
-  const method = request.method;
-  const updateStatus = method === "PATCH" ? body.status as ModerationStatus : null;
-  const operationBody = method === "PATCH"
-    ? JSON.stringify({
-        moderation_status: updateStatus,
-        reviewed_at: updateStatus === "pending" ? null : new Date().toISOString(),
-      })
-    : undefined;
-
+  // One database RPC performs the change AND audit append atomically.
+  // If the audit insert fails, PostgreSQL rolls back the moderation change.
+  const url = supabaseEndpoint("/rest/v1/rpc/admin_moderate_spelling");
   try {
-    const result = await fetch(restUrl, {
-      method,
+    const response = await fetch(url, {
+      method: "POST",
       headers: serviceHeaders({
-        Prefer: "return=representation",
-        ...(method === "PATCH" ? { "Content-Type": "application/json" } : {}),
+        "Content-Type": "application/json",
+        Accept: "application/json",
       }),
-      body: operationBody,
+      body: JSON.stringify({
+        p_id: body.id,
+        p_action: action,
+        p_actor_id: actorId,
+      }),
       signal: AbortSignal.timeout(8000),
     });
-    if (!result.ok) {
-      console.error("Moderation mutation failed:", result.status);
-      return jsonResponse({ error: "Database moderation operation failed." }, 502);
+
+    if (!response.ok) {
+      console.error("Audited moderation RPC returned HTTP:", response.status);
+      if (response.status === 404) {
+        return jsonResponse({
+          error: "Audit logging is not installed yet. Run supabase/phase6b_audit_logging.sql in Supabase.",
+        }, 503);
+      }
+      return jsonResponse({ error: "Audited moderation failed; the database change was not confirmed." }, 502);
     }
-    const records: unknown = await result.json();
-    if (!Array.isArray(records) || records.length !== 1 || !isRecord(records[0])) {
-      return jsonResponse({ error: "Record not found or could not confirm operation." }, 404);
+
+    const data: unknown = await response.json();
+    if (!data || typeof data !== "object" || Array.isArray(data)) {
+      return jsonResponse({ error: "Unexpected moderation response." }, 502);
     }
-    return jsonResponse({ ok: true, record: records[0] });
+    const value = data as Record<string, unknown>;
+    if (value.ok !== true) {
+      const reason = value.error;
+      if (reason === "not_found") return jsonResponse({ error: "Submission not found." }, 404);
+      if (reason === "already_in_state") {
+        return jsonResponse({ error: "Submission already has that moderation status." }, 409);
+      }
+      return jsonResponse({ error: "Invalid moderation operation." }, 400);
+    }
+    if (typeof value.audit_id !== "number" || !value.record ||
+        typeof value.record !== "object") {
+      return jsonResponse({ error: "The audit entry could not be confirmed." }, 502);
+    }
+
+    return jsonResponse({
+      ok: true,
+      audit_id: value.audit_id,
+      record: value.record,
+    });
   } catch {
-    return jsonResponse({ error: "Could not reach the database." }, 502);
+    return jsonResponse({ error: "Could not reach the audited moderation service." }, 502);
   }
 }
 
