@@ -3,6 +3,7 @@ import { Route, Switch } from 'wouter';
 import { Analytics } from '@vercel/analytics/react';
 
 import App from './App';
+import { AdminPage } from './pages/AdminPage';
 import { WordPage } from './pages/WordPage';
 
 import './index.css';
@@ -10,6 +11,7 @@ import './index.css';
 function Routes() {
   return (
     <Switch>
+      <Route path="/admin" component={AdminPage} />
       <Route path="/word/:slug" component={WordPage} />
       <Route component={App} />
     </Switch>
