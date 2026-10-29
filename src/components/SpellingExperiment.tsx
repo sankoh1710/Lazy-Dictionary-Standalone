@@ -206,7 +206,7 @@ export function SpellingExperiment() {
                 resetSignal={challengeReset}
               />
             )}
-            {error && <p role="alert" className="text-sm text-destructive">{error}</p>
+            {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
             {message && <p role="status" className="text-sm text-muted-foreground">{message}</p>}
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
