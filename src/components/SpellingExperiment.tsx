@@ -1,57 +1,49 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { ArrowRight, PenLine } from "lucide-react";
+import { PenLine } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { validateSpellingSubmission } from "@/lib/spellingSubmission";
-import { SpellingRecords } from "./SpellingRecords";
-import { SpellingAnalytics } from "./SpellingAnalytics";
-import { SpellingModeration } from "./SpellingModeration";
 
 type ConnectionMode = "checking" | "preview" | "database";
 
-interface RecentSubmission {
-  originalWord: string;
-  suggestedSpelling: string;
-  saved: boolean;
-  id?: number;
-}
-
+/**
+ * Visitor-facing component: one form, one confirmation.
+ * Analytics, records and moderation are intentionally in /admin only.
+ *
+ * Until the public write API is secured and enabled, deployed pages stay in
+ * preview mode and NEVER claim a real submission was stored.
+ */
 export function SpellingExperiment() {
   const [originalWord, setOriginalWord] = useState("");
   const [suggestedSpelling, setSuggestedSpelling] = useState("");
-  const [recentSubmissions, setRecentSubmissions] = useState<RecentSubmission[]>([]);
   const [mode, setMode] = useState<ConnectionMode>("checking");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [savedVersion, setSavedVersion] = useState(0);
 
-  // Vite alone serves only the frontend. The database mode becomes available
-  // when the Vercel API reports that it is deliberately enabled and configured.
   useEffect(() => {
     const controller = new AbortController();
 
-    async function checkConnection() {
+    async function checkAvailability() {
       try {
         const response = await fetch("/api/spellings", {
           cache: "no-store",
           signal: controller.signal,
         });
-        if (!response.ok) throw new Error("API unavailable");
+        if (!response.ok) throw new Error("Saving unavailable");
         const result: unknown = await response.json();
         if (controller.signal.aborted) return;
-        const available =
+        const allowed = result !== null &&
           typeof result === "object" &&
-          result !== null &&
           "enabled" in result &&
           result.enabled === true;
-        setMode(available ? "database" : "preview");
+        setMode(allowed ? "database" : "preview");
       } catch {
         if (!controller.signal.aborted) setMode("preview");
       }
     }
 
-    void checkConnection();
+    void checkAvailability();
     return () => controller.abort();
   }, []);
 
@@ -65,31 +57,13 @@ export function SpellingExperiment() {
       original_word: originalWord,
       suggested_spelling: suggestedSpelling,
     });
-
     if (!validated.ok) {
       setError(validated.error);
       return;
     }
 
-    const addRecent = (saved: boolean, id?: number) => {
-      setRecentSubmissions((previous) =>
-        [
-          {
-            originalWord: validated.value.original_word,
-            suggestedSpelling: validated.value.suggested_spelling,
-            saved,
-            id,
-          },
-          ...previous,
-        ].slice(0, 5),
-      );
-      setOriginalWord("");
-      setSuggestedSpelling("");
-    };
-
-    if (mode === "preview") {
-      addRecent(false);
-      setMessage("Preview added. No data has been sent or saved.");
+    if (mode !== "database") {
+      setMessage("This is a preview. No spelling was submitted or saved.");
       return;
     }
 
@@ -102,34 +76,29 @@ export function SpellingExperiment() {
       });
       const result: unknown = await response.json();
       if (!response.ok) {
-        const detail =
+        const detail = result !== null &&
           typeof result === "object" &&
-          result !== null &&
           "error" in result &&
           typeof result.error === "string"
             ? result.error
-            : "Unable to save. Please try again.";
+            : "Unable to submit. Please try again.";
         throw new Error(detail);
       }
-      if (
-        typeof result !== "object" ||
-        result === null ||
-        !("saved" in result) ||
-        result.saved !== true ||
-        !("submission" in result) ||
-        typeof result.submission !== "object" ||
-        result.submission === null ||
-        !("id" in result.submission) ||
-        typeof result.submission.id !== "number"
-      ) {
-        throw new Error("The database did not confirm the saved record.");
+
+      if (result === null || typeof result !== "object" ||
+          !("saved" in result) || result.saved !== true ||
+          !("submission" in result) || result.submission === null ||
+          typeof result.submission !== "object" ||
+          !("id" in result.submission) ||
+          typeof result.submission.id !== "number") {
+        throw new Error("The server did not confirm that your spelling was saved.");
       }
 
-      addRecent(true, result.submission.id);
-      setSavedVersion((version) => version + 1);
-      setMessage("Saved to PostgreSQL. Check the row in your Supabase SQL Editor.");
+      setOriginalWord("");
+      setSuggestedSpelling("");
+      setMessage("Your spelling suggestion was saved for review.");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to save. Please try again.");
+      setError(cause instanceof Error ? cause.message : "Unable to submit. Try again.");
     } finally {
       setSaving(false);
     }
@@ -213,66 +182,24 @@ export function SpellingExperiment() {
                 className="rounded-xl bg-primary px-5 py-3 font-semibold text-primary-foreground hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {mode === "checking"
-                  ? "Checking connection…"
+                  ? "Checking availability…"
                   : saving
-                    ? "Saving…"
+                    ? "Submitting…"
                     : mode === "database"
-                      ? "Save spelling"
-                      : "Preview my spelling"}
+                      ? "Submit spelling"
+                      : "Preview spelling"}
               </button>
               <span className="text-xs text-muted-foreground">
                 {mode === "database"
-                  ? "Local database test · 5 valid submissions/minute (shared)"
+                  ? "Development test · suggestions go to review"
                   : mode === "checking"
-                    ? "Checking whether database writes are enabled"
-                    : "Preview mode · nothing is stored or sent"}
+                    ? "Checking submission availability"
+                    : "Public submissions are not open yet · no data is saved"}
               </span>
             </div>
           </form>
-
-          <div className="border-t border-border/60 pt-5">
-            <h3 className="text-sm font-semibold text-foreground mb-3">
-              Recent submissions in this browser
-            </h3>
-            {recentSubmissions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Nothing here yet. Submit a spelling above to test the form.
-              </p>
-            ) : (
-              <ul className="flex flex-col gap-2" aria-label="Recent spellings">
-                {recentSubmissions.map((submission, index) => (
-                  <li
-                    key={submission.id ?? `preview-${index}`}
-                    className="flex flex-wrap items-center gap-3 rounded-xl bg-secondary/30 px-4 py-3 text-sm"
-                  >
-                    <span className="font-medium break-all">{submission.originalWord}</span>
-                    <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                    <span className="font-bold text-primary break-all">
-                      {submission.suggestedSpelling}
-                    </span>
-                    <span className="text-xs text-muted-foreground ml-auto">
-                      {submission.saved ? `Saved · #${submission.id}` : "Preview only"}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <p className="mt-3 text-xs text-muted-foreground">
-              This list resets on refresh. Records marked "Saved" stay in PostgreSQL.
-            </p>
-          </div>
         </CardContent>
       </Card>
-      {mode === "database" && (
-        <>
-          <SpellingAnalytics refreshToken={savedVersion} />
-          <SpellingRecords refreshToken={savedVersion} />
-          <SpellingModeration
-            refreshToken={savedVersion}
-            onChanged={() => setSavedVersion((version) => version + 1)}
-          />
-        </>
-      )}
     </section>
   );
 }
