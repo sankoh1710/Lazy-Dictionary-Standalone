@@ -40,7 +40,7 @@ function isRecordsResponse(data: unknown): data is RecordsResponse {
  * Local development only. Renders only when the parent confirms that the
  * database API is enabled. A backend gate independently blocks public access.
  */
-export function SpellingRecords({ refreshToken }: { refreshToken: number }) {
+export function SpellingRecords({ refreshToken, token }: { refreshToken: number; token: string }) {
   const [wordInput, setWordInput] = useState("");
   const [activeWord, setActiveWord] = useState("");
   const [sort, setSort] = useState<"recent" | "oldest">("recent");
@@ -61,6 +61,7 @@ export function SpellingRecords({ refreshToken }: { refreshToken: number }) {
 
       try {
         const response = await fetch("/api/spelling-records?" + params.toString(), {
+          headers: { Authorization: "Bearer " + token },
           signal: controller.signal,
           cache: "no-store",
         });
@@ -82,7 +83,7 @@ export function SpellingRecords({ refreshToken }: { refreshToken: number }) {
 
     void fetchRecords();
     return () => controller.abort();
-  }, [activeWord, sort, refreshToken, refreshCount]);
+  }, [activeWord, sort, refreshToken, refreshCount, token]);
 
   const applyFilter = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
