@@ -222,7 +222,7 @@ export function SpellingExperiment() {
               </button>
               <span className="text-xs text-muted-foreground">
                 {mode === "database"
-                  ? "Database test mode · saves to Supabase"
+                  ? "Local database test · 5 valid submissions/minute (shared)"
                   : mode === "checking"
                     ? "Checking whether database writes are enabled"
                     : "Preview mode · nothing is stored or sent"}
