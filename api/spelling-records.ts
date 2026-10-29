@@ -1,3 +1,5 @@
+import { authorizedAdminRequest } from "../src/server/adminAuth";
+
 /**
  * Local-only read endpoint for practicing SQL-style retrieval.
  *
@@ -59,8 +61,8 @@ async function handleRequest(request: Request): Promise<Response> {
     return json({ error: "Method not allowed." }, 405);
   }
 
-  if (!isEnabled(request)) {
-    return json({ error: "Saved records are only available during local database testing." }, 403);
+  if (!await authorizedAdminRequest(request)) {
+    return json({ error: "An authorized admin session is required." }, 401);
   }
 
   const input = new URL(request.url);
