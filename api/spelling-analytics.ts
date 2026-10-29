@@ -71,7 +71,7 @@ function isAnalytics(value: unknown): boolean {
 
 async function handleRequest(request: Request): Promise<Response> {
   if (request.method !== "GET") return json({ error: "Method not allowed." }, 405);
-  if (!await authorizedAdminRequest(request)) {
+  if (!enabledForLocalDevelopment(request) || !await authorizedAdminRequest(request)) {
     return json({ error: "An authorized admin session is required." }, 401);
   }
 
