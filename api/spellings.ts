@@ -79,6 +79,65 @@ async function handleRequest(request: Request): Promise<Response> {
     return json({ error: "Database connection is not configured correctly." }, 503);
   }
 
+  // Phase 6B: consume an atomic PostgreSQL quota BEFORE attempting an INSERT.
+  // Only validated local-development submissions reach this point.
+  // The quota is a shared local-demo counter, not a per-user/IP security policy.
+  const quotaUrl = new URL("/rest/v1/rpc/consume_local_spelling_quota", baseUrl);
+  try {
+    const quotaResponse = await fetch(quotaUrl, {
+      method: "POST",
+      headers: {
+        apikey: secretKey,
+        "Content-Type": "application/json",
+      },
+      body: "{}",
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!quotaResponse.ok) {
+      console.error("Supabase quota lookup failed:", quotaResponse.status);
+      if (quotaResponse.status === 404) {
+        return json({
+          error: "Rate-limit SQL is not installed. Run supabase/phase6b_local_rate_limit.sql in Supabase first.",
+        }, 503);
+      }
+      return json({ error: "Unable to verify submission allowance. Try again later." }, 503);
+    }
+
+    const quota: unknown = await quotaResponse.json();
+    if (
+      !quota ||
+      typeof quota !== "object" ||
+      Array.isArray(quota) ||
+      !("allowed" in quota) ||
+      typeof quota.allowed !== "boolean" ||
+      !("retry_after_seconds" in quota) ||
+      typeof quota.retry_after_seconds !== "number" ||
+      !Number.isInteger(quota.retry_after_seconds) ||
+      quota.retry_after_seconds < 1 ||
+      quota.retry_after_seconds > 60
+    ) {
+      return json({ error: "Unexpected rate-limit response from the database." }, 503);
+    }
+
+    if (!quota.allowed) {
+      const seconds = quota.retry_after_seconds;
+      return Response.json({
+        error: `Local test limit reached (5 valid submissions per minute). Try again in about ${seconds} seconds.`,
+        retry_after_seconds: seconds,
+      }, {
+        status: 429,
+        headers: {
+          "Cache-Control": "no-store",
+          "Retry-After": String(seconds),
+          "X-Content-Type-Options": "nosniff",
+        },
+      });
+    }
+  } catch {
+    return json({ error: "Rate-limit service unavailable. No record was saved." }, 503);
+  }
+
   try {
     // New Supabase secret API keys go in the apikey header, NOT a Bearer token.
     const response = await fetch(restUrl, {
