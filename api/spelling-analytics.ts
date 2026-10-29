@@ -1,3 +1,5 @@
+import { authorizedAdminRequest } from "../src/server/adminAuth";
+
 /**
  * Phase 5: local-only aggregate analytics (read-only).
  * The browser never receives the Supabase secret key. PostgreSQL performs
@@ -69,8 +71,8 @@ function isAnalytics(value: unknown): boolean {
 
 async function handleRequest(request: Request): Promise<Response> {
   if (request.method !== "GET") return json({ error: "Method not allowed." }, 405);
-  if (!enabledForLocalDevelopment(request)) {
-    return json({ error: "Analytics are available only during local database testing." }, 403);
+  if (!await authorizedAdminRequest(request)) {
+    return json({ error: "An authorized admin session is required." }, 401);
   }
 
   let url: URL;
