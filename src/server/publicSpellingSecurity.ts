@@ -28,7 +28,8 @@ export function publicSubmissionConfig(request: Request): {
       !process.env.SUPABASE_URL ||
       !process.env.SUPABASE_SECRET_KEY ||
       !process.env.PUBLIC_RATE_LIMIT_PEPPER ||
-      process.env.PUBLIC_RATE_LIMIT_PEPPER.length < 32
+      process.env.PUBLIC_RATE_LIMIT_PEPPER.length < 32 ||
+      process.env.PUBLIC_RATE_LIMIT_PEPPER.startsWith("REPLACE_")
     ) return null;
     return { hostname };
   } catch {
