@@ -12,7 +12,8 @@ function json(data: unknown, status = 200): Response {
 
 /**
  * Enable writes only for an explicitly enabled LOCAL development experiment.
- * Preview and production deployments will need abuse prevention before activation.
+ * Production/Preview writing only occurs via the separately validated
+ * publicSubmissionConfig gate, never via this local-only experiment flag.
  */
 function isConfiguredAndEnabled(request: Request): boolean {
   let host: string;
@@ -38,6 +39,7 @@ async function handleRequest(request: Request): Promise<Response> {
     if (publicConfig) return json({
       enabled: true,
       mode: "public",
+      environment: publicConfig.environment,
       turnstileSiteKey: publicConfig.siteKey,
     });
     return json({ enabled: false, mode: "preview" });
@@ -90,9 +92,9 @@ async function handleRequest(request: Request): Promise<Response> {
     return json({ error: "Database connection is not configured correctly." }, 503);
   }
 
-  // Phase 6B: consume an atomic PostgreSQL quota BEFORE attempting an INSERT.
-  // Only validated local-development submissions reach this point.
-  // The quota is a shared local-demo counter, not a per-user/IP security policy.
+  // Every accepted request consumes an atomic quota BEFORE inserting.
+  // Production/staging have a separate HMAC-IP quota + Turnstile gate.
+  // Local development keeps its earlier shared demonstration quota.
   if (publicConfig) {
     const denied = await authorizePublicSpelling(request, body, publicConfig.hostname);
     if (denied) return denied;
