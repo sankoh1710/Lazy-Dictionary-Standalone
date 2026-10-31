@@ -1,23 +1,38 @@
 import { createHmac } from "node:crypto";
 
 /**
- * Public release is deliberately disabled unless every server-side control is
- * configured AND the request reaches the exact production hostname.
+ * Two independently gated environments:
+ * - Preview staging: opt-in test domain + this exact feature branch.
+ * - Production: separately opt-in with its own hostname and variables.
  *
- * Never enable this just to get a preview form working. A missing check must
- * fail closed, not silently fall back to an unprotected INSERT.
+ * Configured URLs, secret keys, and Vercel environment/branch assertions are
+ * server-side. Never infer permission to INSERT from a browser-side feature flag.
  */
 export function publicSubmissionConfig(request: Request): {
   hostname: string;
   siteKey: string;
+  environment: "staging" | "production";
 } | null {
   try {
     const url = new URL(request.url);
     const hostname = process.env.PUBLIC_SPELLING_HOSTNAME?.trim().toLowerCase();
     const siteKey = process.env.TURNSTILE_SITE_KEY?.trim();
+
+    const production =
+      process.env.VERCEL_ENV === "production" &&
+      process.env.PUBLIC_SPELLING_SUBMISSIONS_ENABLED === "true";
+
+    const staging =
+      process.env.VERCEL_ENV === "preview" &&
+      process.env.STAGING_SPELLING_SUBMISSIONS_ENABLED === "true" &&
+      // Do not accidentally enable staging on another Preview branch.
+      process.env.VERCEL_GIT_COMMIT_REF === "feature/spelling-experiment-phase1" &&
+      // Staging requires an explicitly named subdomain, not the live site.
+      hostname?.startsWith("staging.") === true &&
+      hostname !== "staging.vercel.app";
+
     if (
-      process.env.VERCEL_ENV !== "production" ||
-      process.env.PUBLIC_SPELLING_SUBMISSIONS_ENABLED !== "true" ||
+      (!production && !staging) ||
       !hostname ||
       !/^[a-z0-9.-]+$/.test(hostname) ||
       hostname !== url.hostname.toLowerCase() ||
@@ -30,7 +45,7 @@ export function publicSubmissionConfig(request: Request): {
       process.env.PUBLIC_RATE_LIMIT_PEPPER.length < 32
     ) return null;
 
-    return { hostname, siteKey };
+    return { hostname, siteKey, environment: staging ? "staging" : "production" };
   } catch {
     return null;
   }
