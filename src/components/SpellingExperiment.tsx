@@ -19,6 +19,7 @@ export function SpellingExperiment() {
   const [suggestedSpelling, setSuggestedSpelling] = useState("");
   const [mode, setMode] = useState<ConnectionMode>("checking");
   const [turnstileSiteKey, setTurnstileSiteKey] = useState("");
+  const [testStaging, setTestStaging] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState("");
   const [challengeReset, setChallengeReset] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -48,6 +49,7 @@ export function SpellingExperiment() {
                    typeof result.turnstileSiteKey === "string" &&
                    result.turnstileSiteKey) {
           setTurnstileSiteKey(result.turnstileSiteKey);
+          setTestStaging("environment" in result && result.environment === "staging");
           setMode("public");
         } else if ("mode" in result && result.mode === "local") {
           setMode("local");
@@ -119,7 +121,9 @@ export function SpellingExperiment() {
 
       setOriginalWord("");
       setSuggestedSpelling("");
-      setMessage("Your spelling suggestion was saved for review.");
+      setMessage(testStaging
+        ? "Staging test saved to the test database for review."
+        : "Your spelling suggestion was saved for review.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to submit. Try again.");
     } finally {
@@ -199,6 +203,11 @@ export function SpellingExperiment() {
               </div>
             </div>
 
+            {mode === "public" && testStaging && (
+              <p role="status" className="text-sm text-muted-foreground">
+                Staging environment · Test submissions only. This is not the public website.
+              </p>
+            )}
             {mode === "public" && turnstileSiteKey && (
               <TurnstileChallenge
                 siteKey={turnstileSiteKey}
@@ -225,7 +234,7 @@ export function SpellingExperiment() {
               </button>
               <span className="text-xs text-muted-foreground">
                 {mode === "public"
-                  ? "Suggestions are reviewed before publication"
+                  ? (testStaging ? "Staging test · saved to a separate test database" : "Suggestions are reviewed before publication")
                   : mode === "local"
                     ? "Local development test · suggestions go to review"
                   : mode === "checking"
