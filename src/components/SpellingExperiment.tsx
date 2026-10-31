@@ -159,6 +159,11 @@ export function SpellingExperiment() {
               </div>
             </div>
 
+            {mode === "enabled" && (
+              <p className="text-xs text-muted-foreground">
+                Please submit words only, not personal information.
+              </p>
+            )}
             {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
             {message && <p role="status" className="text-sm text-muted-foreground">{message}</p>}
 
@@ -179,7 +184,7 @@ export function SpellingExperiment() {
                   ? "Checking availability"
                   : mode === "disabled"
                     ? "Submissions are not open yet"
-                    : "Suggestions are reviewed before being added"}
+                    : "Suggestions are reviewed manually"}
               </span>
             </div>
           </form>
