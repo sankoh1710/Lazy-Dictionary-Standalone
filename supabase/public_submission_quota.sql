@@ -1,8 +1,7 @@
--- Public beta preparation: IP-derived, HMAC-salted quota scopes.
--- Requires a trusted proxy (Vercel) and server-side HMAC only.
--- No raw IP address is stored in PostgreSQL.
--- Still requires Cloudflare Turnstile, monitoring and staging tests.
---
+-- Small public beta: 4 submissions/minute and 20/hour per Vercel-client IP.
+-- The server HMACs client IP with a secret pepper; only the digest is stored.
+-- No CAPTCHA and no separate staging Supabase database are required.
+-- Run ONCE in the same Supabase project used by live site and local admin.
 -- DO NOT enable public writes until this migration has been applied.
 
 CREATE SCHEMA IF NOT EXISTS private;
@@ -18,7 +17,9 @@ CREATE TABLE IF NOT EXISTS private.spelling_public_limits (
 );
 ALTER TABLE private.spelling_public_limits ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON private.spelling_public_limits FROM PUBLIC, anon, authenticated;
-GRANT SELECT, INSERT, UPDATE ON private.spelling_public_limits TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON private.spelling_public_limits TO service_role;
+CREATE INDEX IF NOT EXISTS spelling_public_limits_window_idx
+ON private.spelling_public_limits (window_start);
 
 CREATE OR REPLACE FUNCTION public.consume_public_spelling_quota(p_scope_hash text)
 RETURNS jsonb
@@ -35,9 +36,55 @@ DECLARE
   hour_count integer;
   wait_seconds integer;
 BEGIN
-  IF p_scope_hash IS NULL OR p_scope_hash !~ '^[a-f0-9]{64}$' THEN
+  IF p_scope_hash IS NULL OR p_scope_hash !~ '^[a-f0-9]{64}
+  INSERT INTO private.spelling_public_limits AS quota (scope_hash, window_kind, window_start, attempts)
+  VALUES (p_scope_hash, 'minute', minute_start, 1)
+  ON CONFLICT (scope_hash, window_kind, window_start)
+  DO UPDATE SET attempts = LEAST(quota.attempts + 1, 100)
+  RETURNING attempts INTO minute_count;
+
+  INSERT INTO private.spelling_public_limits AS quota (scope_hash, window_kind, window_start, attempts)
+  VALUES (p_scope_hash, 'hour', hour_start, 1)
+  ON CONFLICT (scope_hash, window_kind, window_start)
+  DO UPDATE SET attempts = LEAST(quota.attempts + 1, 100)
+  RETURNING attempts INTO hour_count;
+
+  wait_seconds := CASE
+    WHEN hour_count > 20 THEN (3600 - epoch_now % 3600)::integer
+    WHEN minute_count > 4 THEN (60 - epoch_now % 60)::integer
+    ELSE 0
+  END;
+
+  RETURN pg_catalog.jsonb_build_object(
+    'allowed', (minute_count <= 4 AND hour_count <= 20),
+    'retry_after_seconds', wait_seconds
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.consume_public_spelling_quota(text)
+FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.consume_public_spelling_quota(text)
+TO service_role;
+
+NOTIFY pgrst, 'reload schema';
+
+-- Safe read-only inspection; scopes are pseudonymous hashes.
+-- SELECT window_kind, window_start, attempts
+-- FROM private.spelling_public_limits
+-- ORDER BY window_start DESC LIMIT 15;
+--
+-- Old hashed scopes are cleaned during subsequent quota requests. The
+-- database may hold older counters while no requests arrive; no cron needed
+-- for this small MVP. An index helps avoid a full scan as use increases.
+ THEN
     RETURN pg_catalog.jsonb_build_object('allowed', false, 'retry_after_seconds', 3600);
   END IF;
+
+  -- Cheap opportunistic retention cleanup on the next quota request.
+  -- Nothing runs in the background when the website has no submissions.
+  DELETE FROM private.spelling_public_limits
+  WHERE window_start < pg_catalog.clock_timestamp() - INTERVAL '48 hours';
 
   INSERT INTO private.spelling_public_limits AS quota (scope_hash, window_kind, window_start, attempts)
   VALUES (p_scope_hash, 'minute', minute_start, 1)
