@@ -3,6 +3,7 @@ import { Search, ArrowRight, BookOpen, Info, Wand2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { toLazy } from "./lib/lazySpell";
+import { SpellingSuggestion } from "./components/SpellingSuggestion";
 import { lookupWord, dictionary, DictionaryEntry } from "./data/dictionary";
 
 // Randomly sample n words from the dictionary
@@ -142,6 +143,9 @@ function App() {
             </div>
           )}
         </section>
+
+        {/* Visitors can suggest an alternative spelling. */}
+        <SpellingSuggestion />
 
         {/* The Lazy Alphabet */}
         <section className="mt-8 flex flex-col gap-6 animate-in fade-in duration-1000 delay-300 fill-mode-both">
