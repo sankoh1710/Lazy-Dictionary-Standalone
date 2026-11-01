@@ -6,7 +6,6 @@ import { toLazy } from "./lib/lazySpell";
 import { SpellingExperiment } from "./components/SpellingExperiment";
 import { lookupWord, dictionary, DictionaryEntry } from "./data/dictionary";
 
-// Randomly sample n words from the dictionary
 function sampleWords(n: number): string[] {
   const shuffled = [...dictionary].sort(() => Math.random() - 0.5);
   return shuffled.slice(0, n).map((e) => e.word);
