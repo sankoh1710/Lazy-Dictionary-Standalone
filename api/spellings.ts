@@ -1,6 +1,7 @@
+import { publicSubmissionConfig, authorizePublicSpelling } from "../src/server/publicSpellingSecurity";
 import { validateSpellingSubmission } from "../src/lib/spellingSubmission";
 
-const MAX_BODY_BYTES = 2048;
+const MAX_BODY_BYTES = 2048; // two short spelling fields only
 
 function json(data: unknown, status = 200): Response {
   return Response.json(data, {
@@ -10,8 +11,8 @@ function json(data: unknown, status = 200): Response {
 }
 
 /**
- * Enable writes only for an explicitly enabled LOCAL development experiment.
- * Preview and production deployments will need abuse prevention before activation.
+ * Local learning mode. Production writes are gated separately by
+ * publicSubmissionConfig; Preview deployments never accept submissions.
  */
 function isConfiguredAndEnabled(request: Request): boolean {
   let host: string;
@@ -31,14 +32,20 @@ function isConfiguredAndEnabled(request: Request): boolean {
 
 async function handleRequest(request: Request): Promise<Response> {
   if (request.method === "GET") {
-    return json({ enabled: isConfiguredAndEnabled(request) });
+    const localMode = isConfiguredAndEnabled(request);
+    const publicConfig = publicSubmissionConfig(request);
+    if (localMode) return json({ enabled: true, mode: "local" });
+    if (publicConfig) return json({ enabled: true, mode: "public" });
+    return json({ enabled: false, mode: "preview" });
   }
 
   if (request.method !== "POST") {
     return json({ error: "Method not allowed." }, 405);
   }
 
-  if (!isConfiguredAndEnabled(request)) {
+  const localMode = isConfiguredAndEnabled(request);
+  const publicConfig = publicSubmissionConfig(request);
+  if (!localMode && !publicConfig) {
     return json({ error: "Database submissions are not enabled here." }, 503);
   }
 
@@ -79,9 +86,16 @@ async function handleRequest(request: Request): Promise<Response> {
     return json({ error: "Database connection is not configured correctly." }, 503);
   }
 
-  // Phase 6B: consume an atomic PostgreSQL quota BEFORE attempting an INSERT.
-  // Only validated local-development submissions reach this point.
-  // The quota is a shared local-demo counter, not a per-user/IP security policy.
+  // Validate before charging either quota. For production, the server
+  // requires same-origin requests and an atomic per-client PostgreSQL limit.
+  // The local learning mode retains its original shared demonstration quota.
+  if (publicConfig) {
+    const denied = await authorizePublicSpelling(request, publicConfig.hostname);
+    if (denied) return denied;
+  }
+
+  // Local development retains the previously tested shared five/minute quota.
+  if (localMode) {
   const quotaUrl = new URL("/rest/v1/rpc/consume_local_spelling_quota", baseUrl);
   try {
     const quotaResponse = await fetch(quotaUrl, {
@@ -137,6 +151,7 @@ async function handleRequest(request: Request): Promise<Response> {
   } catch {
     return json({ error: "Rate-limit service unavailable. No record was saved." }, 503);
   }
+  }
 
   try {
     // New Supabase secret API keys go in the apikey header, NOT a Bearer token.
@@ -147,7 +162,10 @@ async function handleRequest(request: Request): Promise<Response> {
         "Content-Type": "application/json",
         "Prefer": "return=representation",
       },
-      body: JSON.stringify(validated.value),
+      body: JSON.stringify({
+        ...validated.value,
+        moderation_status: "pending",
+      }),
       signal: AbortSignal.timeout(8000),
     });
 

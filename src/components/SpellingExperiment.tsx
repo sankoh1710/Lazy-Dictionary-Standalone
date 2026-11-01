@@ -4,14 +4,14 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { validateSpellingSubmission } from "@/lib/spellingSubmission";
 
-type ConnectionMode = "checking" | "preview" | "database";
+type ConnectionMode = "checking" | "disabled" | "enabled";
 
 /**
- * Visitor-facing component: one form, one confirmation.
- * Analytics, records and moderation are intentionally in /admin only.
+ * Visitor-facing MVP: a two-field spelling suggestion form.
+ * Administration, analytics, records, and audit logs are not exposed here.
  *
- * Until the public write API is secured and enabled, deployed pages stay in
- * preview mode and NEVER claim a real submission was stored.
+ * The server decides whether submissions are enabled. A browser-only flag
+ * can never grant database write access.
  */
 export function SpellingExperiment() {
   const [originalWord, setOriginalWord] = useState("");
@@ -30,16 +30,14 @@ export function SpellingExperiment() {
           cache: "no-store",
           signal: controller.signal,
         });
-        if (!response.ok) throw new Error("Saving unavailable");
-        const result: unknown = await response.json();
+        if (!response.ok) throw new Error("API unavailable");
+        const data: unknown = await response.json();
         if (controller.signal.aborted) return;
-        const allowed = result !== null &&
-          typeof result === "object" &&
-          "enabled" in result &&
-          result.enabled === true;
-        setMode(allowed ? "database" : "preview");
+        const enabled = !!data && typeof data === "object" &&
+          "enabled" in data && data.enabled === true;
+        setMode(enabled ? "enabled" : "disabled");
       } catch {
-        if (!controller.signal.aborted) setMode("preview");
+        if (!controller.signal.aborted) setMode("disabled");
       }
     }
 
@@ -49,7 +47,7 @@ export function SpellingExperiment() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (saving || mode === "checking") return;
+    if (saving || mode !== "enabled") return;
     setError("");
     setMessage("");
 
@@ -62,11 +60,6 @@ export function SpellingExperiment() {
       return;
     }
 
-    if (mode !== "database") {
-      setMessage("This is a preview. No spelling was submitted or saved.");
-      return;
-    }
-
     setSaving(true);
     try {
       const response = await fetch("/api/spellings", {
@@ -76,29 +69,27 @@ export function SpellingExperiment() {
       });
       const result: unknown = await response.json();
       if (!response.ok) {
-        const detail = result !== null &&
-          typeof result === "object" &&
-          "error" in result &&
-          typeof result.error === "string"
-            ? result.error
-            : "Unable to submit. Please try again.";
+        const detail = !!result && typeof result === "object" &&
+          "error" in result && typeof result.error === "string"
+          ? result.error
+          : "Unable to submit. Please try again.";
         throw new Error(detail);
       }
 
-      if (result === null || typeof result !== "object" ||
+      if (!result || typeof result !== "object" ||
           !("saved" in result) || result.saved !== true ||
-          !("submission" in result) || result.submission === null ||
+          !("submission" in result) || !result.submission ||
           typeof result.submission !== "object" ||
           !("id" in result.submission) ||
           typeof result.submission.id !== "number") {
-        throw new Error("The server did not confirm that your spelling was saved.");
+        throw new Error("The server did not confirm that the suggestion was saved.");
       }
 
       setOriginalWord("");
       setSuggestedSpelling("");
-      setMessage("Your spelling suggestion was saved for review.");
+      setMessage("Thanks. Your spelling suggestion was received and is awaiting review.");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to submit. Try again.");
+      setError(cause instanceof Error ? cause.message : "Unable to submit. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -112,22 +103,17 @@ export function SpellingExperiment() {
     >
       <div className="flex items-center gap-3 ml-2">
         <PenLine className="h-6 w-6 text-primary" aria-hidden="true" />
-        <h2
-          id="spelling-experiment-heading"
-          className="text-2xl font-semibold tracking-tight text-foreground"
-        >
-          Spelling Experiment
+        <h2 id="spelling-experiment-heading" className="text-2xl font-semibold tracking-tight">
+          Suggest a spelling
         </h2>
       </div>
 
       <Card className="rounded-2xl border-border/60 bg-card shadow-sm">
         <CardContent className="p-6 sm:p-8 flex flex-col gap-6">
           <div className="space-y-2">
-            <p className="text-foreground font-medium">
-              How would you spell an English word?
-            </p>
+            <p className="font-medium">How would you spell an English word?</p>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Suggest your own spelling. You do not have to follow the Lazy
+              Suggest your own spelling. You don't have to follow the Lazy
               Alphabet rules. For example: enough → enuf.
             </p>
           </div>
@@ -135,7 +121,7 @@ export function SpellingExperiment() {
           <form onSubmit={(event) => void handleSubmit(event)} className="flex flex-col gap-4" noValidate>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="flex flex-col gap-2">
-                <label htmlFor="original-word" className="text-sm font-medium text-foreground">
+                <label htmlFor="original-word" className="text-sm font-medium">
                   Original English word
                 </label>
                 <Input
@@ -152,8 +138,9 @@ export function SpellingExperiment() {
                   className="h-12 rounded-xl bg-background"
                 />
               </div>
+
               <div className="flex flex-col gap-2">
-                <label htmlFor="suggested-spelling" className="text-sm font-medium text-foreground">
+                <label htmlFor="suggested-spelling" className="text-sm font-medium">
                   Your suggested spelling
                 </label>
                 <Input
@@ -172,29 +159,32 @@ export function SpellingExperiment() {
               </div>
             </div>
 
+            {mode === "enabled" && (
+              <p className="text-xs text-muted-foreground">
+                Please submit words only, not personal information.
+              </p>
+            )}
             {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
             {message && <p role="status" className="text-sm text-muted-foreground">{message}</p>}
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <button
                 type="submit"
-                disabled={saving || mode === "checking"}
-                className="rounded-xl bg-primary px-5 py-3 font-semibold text-primary-foreground hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={saving || mode !== "enabled"}
+                className="rounded-xl bg-primary px-5 py-3 font-semibold text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {mode === "checking"
                   ? "Checking availability…"
                   : saving
                     ? "Submitting…"
-                    : mode === "database"
-                      ? "Submit spelling"
-                      : "Preview spelling"}
+                    : "Submit spelling"}
               </button>
               <span className="text-xs text-muted-foreground">
-                {mode === "database"
-                  ? "Development test · suggestions go to review"
-                  : mode === "checking"
-                    ? "Checking submission availability"
-                    : "Public submissions are not open yet · no data is saved"}
+                {mode === "checking"
+                  ? "Checking availability"
+                  : mode === "disabled"
+                    ? "Submissions are not open yet"
+                    : "Suggestions are reviewed manually"}
               </span>
             </div>
           </form>
