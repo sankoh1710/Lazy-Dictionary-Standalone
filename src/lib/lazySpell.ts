@@ -4,11 +4,11 @@ export function toLazy(word: string): string {
   // Protect digraphs by not modifying them where they shouldn't be
   // We'll apply rules sequentially.
 
-  // 1. ^kn -> n
-  w = w.replace(/^kn/, 'n');
+  // 1. kn -> n
+  w = w.replace(/kn/g, 'n');
   
-  // 2. ^wr -> r
-  w = w.replace(/^wr/, 'r');
+  // 2. wr -> r
+  w = w.replace(/wr/g, 'r');
 
   // 3. wh -> w
   w = w.replace(/wh/g, 'w');

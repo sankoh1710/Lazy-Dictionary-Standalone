@@ -1,0 +1,13 @@
+{
+  "settings": {
+    "createdAt": 1790719468542,
+    "framework": "vite",
+    "devCommand": null,
+    "installCommand": null,
+    "buildCommand": "vite build",
+    "outputDirectory": "dist/public",
+    "rootDirectory": null,
+    "directoryListing": false,
+    "nodeVersion": "24.x"
+  }
+}
