@@ -9,7 +9,7 @@
     "build": "vite build && vite build --ssr src/entry-server.tsx && node scripts/prerender.mjs",
     "preview": "vite preview --host 0.0.0.0",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test tests/game.test.ts"
+    "test": "node --test tests/game.test.mjs"
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",

@@ -1,8 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createGame, gameReducer, sampleRound, type GameWord } from "../src/lib/game.ts";
+import { readFileSync } from "node:fs";
+import ts from "typescript";
 
-const words: GameWord[] = ["phone", "elephant", "queen", "school", "center"].map((original) => ({
+// Use the existing compiler so tests work on the project's Node 20.19 minimum,
+// as well as Node 24, without adding a test runner dependency.
+const source = readFileSync(new URL("../src/lib/game.ts", import.meta.url), "utf8");
+const { outputText } = ts.transpileModule(source, {
+  compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+});
+const { createGame, gameReducer, sampleRound } = await import(
+  `data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`
+);
+
+const words = ["phone", "elephant", "queen", "school", "center"].map((original) => ({
   original, lazy: original + "-lazy", hint: "A meaning clue.",
   answers: original === "center" ? ["center", "centre"] : [original],
 }));
