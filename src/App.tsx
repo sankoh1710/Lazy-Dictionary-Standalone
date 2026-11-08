@@ -70,6 +70,10 @@ function App() {
           <p className="text-base sm:text-lg text-muted-foreground/70 font-medium">
             English words, spelled the way they sound.
           </p>
+          <nav aria-label="Main" className="flex gap-2 mt-3">
+            <a href="/" aria-current="page" className="rounded-full px-5 py-3 bg-foreground text-background text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary">Dictionary</a>
+            <a href="/play" className="rounded-full px-5 py-3 bg-secondary/60 text-sm font-medium hover:bg-secondary focus-visible:outline-2 focus-visible:outline-primary">Practice game</a>
+          </nav>
         </header>
 
         {/* Search */}
@@ -330,4 +334,5 @@ function Rule({
 }
 
 export default App;
+
 

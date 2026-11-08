@@ -17,6 +17,7 @@ Open the local URL shown by Vite.
 
 ```bash
 pnpm typecheck
+pnpm test
 pnpm build
 pnpm preview
 ```
@@ -32,3 +33,19 @@ The production site is written to `dist/public`. The build also pre-renders the 
 - `scripts/prerender.mjs` — static page generation
 
 This repository is a standalone React, TypeScript, Vite, and Tailwind CSS project with no platform-specific runtime or deployment dependency.
+
+## Spelling game
+
+Visit `/play` for a five-word practice round in the dictionary's existing theme.
+Players have three guesses per word, optional meaning hints, and a skip button.
+Results show which words were solved with a hint. Blank or repeated guesses do
+not consume attempts; matching ignores case and surrounding spaces. Accepted
+variants are explicit (for example, `center` and `centre`).
+
+The first round is fixed; replay samples five distinct words from 25 curated
+entries in `src/data/gameWords.ts`. Spellings and hints come from the verified
+dictionary. Game rules live in `src/lib/game.ts` and are covered by `pnpm test`.
+The game runs in the browser without accounts or API calls. Refreshing resets
+practice progress. Daily scheduling, saved progress, and sharing are later work.
+The build pre-renders `/play` with its own metadata for direct visits.
+

@@ -21,7 +21,7 @@ const indexHtmlPath  = resolve(root, 'dist/public/index.html');
 // ---------------------------------------------------------------------------
 // 1. Load the SSR bundle (compiled by `vite build --ssr`)
 // ---------------------------------------------------------------------------
-const { render, renderWord, dictionary } = await import(ssrBundlePath);
+const { render, renderWord, renderGame, dictionary } = await import(ssrBundlePath);
 
 // ---------------------------------------------------------------------------
 // 2. Pre-render the homepage
@@ -43,6 +43,22 @@ console.log('✓ Homepage pre-render complete');
 //    hashed asset paths) but patches the <head> for word-specific metadata.
 // ---------------------------------------------------------------------------
 const BASE_URL = 'https://lazydictionary.com';
+
+// Give /play its own HTML so direct visits hydrate the game, not the homepage.
+const gameTitle = 'Can you read lazy? — Practice Game | Lazy Dictionary';
+const gameDescription = 'Guess the original English spelling from five lazy spellings. Three guesses, optional hints, and no timer. Play a free Lazy Dictionary practice round.';
+let gameHtml = template
+  .replace(/<title>[^<]*<\/title>/, `<title>${gameTitle}</title>`)
+  .replace(/(<meta (?:name|property)="(?:description|og:description|twitter:description)" content=")[^"]*"/g, `$1${gameDescription}"`)
+  .replace(/(<meta (?:name|property)="(?:og:title|twitter:title)" content=")[^"]*"/g, `$1${gameTitle}"`)
+  .replace(/(<meta property="og:url" content=")[^"]*"/, `$1${BASE_URL}/play"`)
+  .replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/, '')
+  .replace('</head>', `    <link rel="canonical" href="${BASE_URL}/play" />\n  </head>`)
+  .replace('<div id="root"></div>', `<div id="root">${renderGame()}</div>`);
+const gameDir = resolve(root, 'dist/public/play');
+mkdirSync(gameDir, { recursive: true });
+writeFileSync(resolve(gameDir, 'index.html'), gameHtml);
+console.log('✓ Practice game pre-render complete');
 
 function escapeHtml(str) {
   return str
@@ -197,8 +213,15 @@ const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
     <priority>1.0</priority>
   </url>
 ${wordEntries}
+  <url>
+    <loc>${BASE_URL}/play</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
 </urlset>`;
 
 writeFileSync(resolve(root, 'dist/public/sitemap.xml'), sitemap);
-console.log(`✓ Sitemap updated with ${wordCount + 1} URLs`);
+console.log(`✓ Sitemap updated with ${wordCount + 2} URLs`);
+
 

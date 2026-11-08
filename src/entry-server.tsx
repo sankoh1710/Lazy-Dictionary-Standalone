@@ -3,6 +3,11 @@ import App from './App';
 import { WordPageContent } from './pages/WordPage';
 import { lookupWord, dictionary } from './data/dictionary';
 import { toLazy } from './lib/lazySpell';
+import { GamePage } from './pages/GamePage';
+
+export function renderGame(): string {
+  return renderToString(<GamePage />);
+}
 
 export function render(): string {
   return renderToString(<App />);
@@ -33,4 +38,5 @@ export function renderWord(slug: string): string {
 // Export dictionary so prerender.mjs can enumerate all words without a
 // separate TypeScript compilation step.
 export { dictionary };
+
 
